@@ -1,45 +1,44 @@
 import streamlit as st
 
-# 1. Sayfa ayarlarını yap ve üst boşluğu tamamen sıfırla
-st.set_page_config(layout="wide", page_title="BIST Sinyal Paneli", page_icon="📈")
+st.set_page_config(layout="wide", page_title="BIST Sinyal Paneli")
 
-# 2. CSS ile boşlukları sil ve banner'ı güzelleştir
 st.markdown("""
     <style>
-    /* Streamlit'in kendi boşluklarını (padding) sıfırlama */
+    /* Üst boşluğu tamamen yok etmek yerine nefes alacak kadar (1.5rem) bırakıyoruz ki kesilmesin */
     .block-container {
-        padding-top: 0rem !important;
-        padding-bottom: 0rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-top: 1.5rem !important;
+        padding-bottom: 1rem !important;
+        max-width: 95% !important;
     }
     
-    /* Banner Tasarımı */
+    /* Banner Tasarımı - Yüksekliği biraz azalttık, içeriği ortaladık */
     .custom-banner {
-        background: linear-gradient(135deg, #FF4B4B 0%, #31112c 100%);
-        padding: 30px;
-        border-radius: 0px 0px 20px 20px; /* Sadece alt köşeler oval */
+        background: linear-gradient(135deg, #FF4B4B 0%, #2b2b2b 100%);
+        padding: 25px;
+        border-radius: 15px;
         color: white;
         text-align: center;
-        margin-left: -1rem; /* Kenar boşluklarını kapatmak için */
-        margin-right: -1rem;
-        margin-bottom: 30px;
-        box-shadow: 0 10px 30px rgba(255, 75, 75, 0.3); /* Kırmızımsı parlama */
-        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+        margin-bottom: 10px; /* Alttaki siyah boşluğu azaltmak için */
+        box-shadow: 0 8px 20px rgba(0,0,0,0.4);
     }
     
     .custom-banner h1 {
-        font-family: 'Inter', sans-serif;
         font-weight: 800;
-        font-size: 3rem !important;
-        margin-bottom: 0px;
-        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        font-size: 2.5rem !important;
+        margin: 0;
+        line-height: 1.2;
     }
     
     .custom-banner p {
-        font-style: italic;
-        opacity: 0.8;
-        font-size: 1.1rem;
+        font-size: 1rem;
+        opacity: 0.9;
+        margin-top: 5px;
+        margin-bottom: 0;
+    }
+
+    /* Tablo ve başlık arasındaki gereksiz boşluğu siler */
+    .element-container {
+        margin-bottom: 0rem !important;
     }
     </style>
     
