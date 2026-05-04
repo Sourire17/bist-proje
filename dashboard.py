@@ -1,28 +1,54 @@
 import streamlit as st
 
-# Sayfayı genişlet ve banner ekle
-st.set_page_config(layout="wide")
+# 1. Sayfa ayarlarını yap ve üst boşluğu tamamen sıfırla
+st.set_page_config(layout="wide", page_title="BIST Sinyal Paneli", page_icon="📈")
 
+# 2. CSS ile boşlukları sil ve banner'ı güzelleştir
 st.markdown("""
     <style>
-    .stApp {
-        background-color: #0e1117;
+    /* Streamlit'in kendi boşluklarını (padding) sıfırlama */
+    .block-container {
+        padding-top: 0rem !important;
+        padding-bottom: 0rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
     }
-    .main-header {
-        background: linear-gradient(135deg, #FF4B4B 0%, #1e1e2f 100%);
-        padding: 1.5rem;
-        border-radius: 15px;
+    
+    /* Banner Tasarımı */
+    .custom-banner {
+        background: linear-gradient(135deg, #FF4B4B 0%, #31112c 100%);
+        padding: 30px;
+        border-radius: 0px 0px 20px 20px; /* Sadece alt köşeler oval */
         color: white;
         text-align: center;
-        margin-bottom: 2rem;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        margin-left: -1rem; /* Kenar boşluklarını kapatmak için */
+        margin-right: -1rem;
+        margin-bottom: 30px;
+        box-shadow: 0 10px 30px rgba(255, 75, 75, 0.3); /* Kırmızımsı parlama */
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .custom-banner h1 {
+        font-family: 'Inter', sans-serif;
+        font-weight: 800;
+        font-size: 3rem !important;
+        margin-bottom: 0px;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    .custom-banner p {
+        font-style: italic;
+        opacity: 0.8;
+        font-size: 1.1rem;
     }
     </style>
-    <div class="main-header">
+    
+    <div class="custom-banner">
         <h1>🚀 BIST Strateji ve Sinyal Paneli</h1>
-        <p>Veriye Dayalı Anlık Analiz</p>
+        <p>Veriye Dayalı Anlık Teknik Analiz</p>
     </div>
 """, unsafe_allow_html=True)
+
 
 import streamlit as st
 import yfinance as yf
