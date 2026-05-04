@@ -1,4 +1,30 @@
 import streamlit as st
+
+# Sayfayı genişlet ve banner ekle
+st.set_page_config(layout="wide")
+
+st.markdown("""
+    <style>
+    .stApp {
+        background-color: #0e1117;
+    }
+    .main-header {
+        background: linear-gradient(135deg, #FF4B4B 0%, #1e1e2f 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        color: white;
+        text-align: center;
+        margin-bottom: 2rem;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    </style>
+    <div class="main-header">
+        <h1>🚀 BIST Strateji ve Sinyal Paneli</h1>
+        <p>Veriye Dayalı Anlık Analiz</p>
+    </div>
+""", unsafe_allow_html=True)
+
+import streamlit as st
 import yfinance as yf
 import pandas as pd
 from kriterler import tum_kriterler
