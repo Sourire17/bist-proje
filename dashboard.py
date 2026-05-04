@@ -1,171 +1,233 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-from backtest import backtest_calistir, BIST30
+from kriterler import tum_kriterler
+from back_test import backtest, guven_skoru
+from config import BIST30, PERIYOTLAR
 
 st.set_page_config(page_title="BIST Sinyal Paneli", layout="wide")
 
-def rsi_hesapla(veri, periyot=14):
-    fark = veri['Close'].diff()
-    kazan = fark.where(fark > 0, 0)
-    kayip = -fark.where(fark < 0, 0)
-    ort_kazan = kazan.rolling(periyot).mean()
-    ort_kayip = kayip.rolling(periyot).mean()
-    rs = ort_kazan / ort_kayip
-    return 100 - (100 / (1 + rs))
+st.markdown("""
+<style>
+.sinyal-al { color: #1D9E75; font-weight: 500; }
+.sinyal-gal { color: #1D9E75; font-weight: 700; }
+.sinyal-sat { color: #e24b4a; font-weight: 500; }
+.sinyal-gsat { color: #e24b4a; font-weight: 700; }
+.sinyal-bekle { color: #888; }
+</style>
+""", unsafe_allow_html=True)
 
-def macd_hesapla(veri):
-    ema12 = veri['Close'].ewm(span=12).mean()
-    ema26 = veri['Close'].ewm(span=26).mean()
-    macd = ema12 - ema26
-    sinyal = macd.ewm(span=9).mean()
-    return macd, sinyal
+def sinyal_karar(puan):
+    if puan >= 4: return "GUCLU AL"
+    elif puan >= 2: return "AL"
+    elif puan <= -4: return "GUCLU SAT"
+    elif puan <= -2: return "SAT"
+    return "BEKLE"
 
-def bollinger_hesapla(veri, periyot=20):
-    ort = veri['Close'].rolling(periyot).mean()
-    std = veri['Close'].rolling(periyot).std()
-    return ort + 2 * std, ort, ort - 2 * std
+sekme1, sekme2, sekme3 = st.tabs([
+    "Sinyal Paneli",
+    "Hisse Detay",
+    "Nasil Calisir"
+])
 
-def stochastic_hesapla(veri, periyot=14):
-    en_yuksek = veri['High'].rolling(periyot).max()
-    en_dusuk = veri['Low'].rolling(periyot).min()
-    k = 100 * (veri['Close'] - en_dusuk) / (en_yuksek - en_dusuk)
-    return k, k.rolling(3).mean()
+with sekme3:
+    st.header("Sistem nasil calisir")
+    st.markdown("""
+Bu panel 5 teknik kriter kullanarak BIST hisseleri icin AL/SAT/BEKLE sinyali uretir.
+Her kriter -1, 0 veya +1 puan verir. Toplam puan -5 ile +5 arasindadir.
+""")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.subheader("5 Kriter")
+        st.markdown("""
+**RSI (Relative Strength Index)**
+Hissenin asiri alim veya asiri satim bolgelerinde olup olmadigini olcer.
+- 35 alti: Asiri satim → AL sinyali (+1)
+- 65 ustu: Asiri alim → SAT sinyali (-1)
 
-def hacim_anomali(veri, periyot=20):
-    ort_hacim = veri['Volume'].rolling(periyot).mean()
-    return veri['Volume'].iloc[-1] > ort_hacim.iloc[-1] * 1.5
+**MACD**
+Kisa ve uzun vadeli hareketli ortalamalar arasindaki farki olcer.
+Momentum ve trend donuslerini gosterir.
+- MACD sinyal cizgisinin ustundeyse: Yukselis (+1)
+- Altindaysa: Dusu (-1)
 
-st.title("BIST Sinyal Paneli")
-st.caption("RSI - MACD - Bollinger - Stochastic - Hacim")
+**Bollinger Bantlari**
+Fiyatin normal araliginin disina cikip cikmadini gosterir.
+- Alt banda yakinsa: Asiri satilmis (+1)
+- Ust banda yakinsa: Asiri alinmis (-1)
 
-sekme1, sekme2 = st.tabs(["Canli Sinyaller", "Backtest Sonuclari"])
+**Destek / Direnc**
+Son 20 gunun en yuksek ve en dusuk fiyatlari baz alinir.
+- Destege yakinsa (+1), dirence yakinsa (-1)
+
+**Hacim Anomalisi**
+Islem hacmi 20 gunluk ortalamanin 1.5 katini asiyorsa anomali var demektir.
+- Yukselis + yuksek hacim: Guclu al (+1)
+- Dusu + yuksek hacim: Guclu sat (-1)
+""")
+    with col2:
+        st.subheader("Puanlama ve Guven Skoru")
+        st.markdown("""
+**Sinyal Karari**
+| Puan | Karar |
+|------|-------|
+| +4, +5 | Guclu AL |
+| +2, +3 | AL |
+| -1, 0, +1 | BEKLE |
+| -2, -3 | SAT |
+| -4, -5 | Guclu SAT |
+
+**Guven Skoru**
+Her hisse icin gecmis sinyallerin dogrulugu backtest ile olculur.
+Sinyal gucu (%40) + backtest dogrulugu (%60) birlestirilir.
+Ornek: Puan 4/5 ve backtest %70 dogru ise guven skoru ~%58 olur.
+
+**Zaman Dilimleri**
+- 4 Saatlik: Kisa vadeli giris zamanlama
+- Gunluk: Ana sinyal uretim zaman dilimi
+- Haftalik: Genel trend yonu
+""")
+        st.subheader("Onemli Not")
+        st.warning("Bu sistem yatirim tavsiyesi vermez. Teknik analiz gecmis veriye dayanir ve gelecegi garanti etmez. Kendi arastirmanizi yapiniz.")
 
 with sekme1:
+    col_a, col_b = st.columns([3, 1])
+    with col_a:
+        st.title("BIST Sinyal Paneli")
+    with col_b:
+        secili_periyot = st.selectbox("Zaman dilimi", list(PERIYOTLAR.keys()), index=1)
+
+    veri_periyot = PERIYOTLAR[secili_periyot]
+
     with st.spinner("Veriler yukleniyor..."):
         sonuclar = []
         for hisse in BIST30:
-            veri = yf.download(hisse, period="3mo", progress=False)
-            if veri.empty:
+            try:
+                veri = yf.download(hisse, period=veri_periyot, progress=False)
+                if veri.empty or len(veri) < 30:
+                    continue
+                veri.columns = veri.columns.get_level_values(0)
+                analiz = tum_kriterler(veri)
+                puan = analiz["puan"]
+                karar = sinyal_karar(puan)
+                bt = backtest(hisse)
+                dogruluk = bt["dogruluk"] if bt else 50.0
+                gskor = guven_skoru(puan, dogruluk)
+                degisim = ((veri['Close'].iloc[-1] - veri['Close'].iloc[-2]) / veri['Close'].iloc[-2]) * 100
+                sonuclar.append({
+                    "Hisse": hisse.replace(".IS", ""),
+                    "Fiyat": round(analiz["fiyat"], 2),
+                    "Degisim %": round(degisim, 2),
+                    "Puan": puan,
+                    "Sinyal": karar,
+                    "Guven %": gskor,
+                    "Backtest %": dogruluk,
+                    "Destek": analiz["destek"],
+                    "Direnc": analiz["direnc"]
+                })
+            except:
                 continue
-            veri.columns = veri.columns.get_level_values(0)
-            veri['RSI'] = rsi_hesapla(veri)
-            veri['MACD'], veri['MACD_S'] = macd_hesapla(veri)
-            bb_ust, bb_ort, bb_alt = bollinger_hesapla(veri)
-            stoch_k, stoch_d = stochastic_hesapla(veri)
-            son = veri.iloc[-1]
-            son_rsi = veri['RSI'].iloc[-1]
-            son_macd = veri['MACD'].iloc[-1]
-            son_macd_s = veri['MACD_S'].iloc[-1]
-            son_fiyat = son['Close']
-            son_bb_ust = bb_ust.iloc[-1]
-            son_bb_alt = bb_alt.iloc[-1]
-            son_stoch = stoch_k.iloc[-1]
-            anomali = hacim_anomali(veri)
-            puan = 0
-            if son_rsi < 35: puan += 1
-            elif son_rsi > 65: puan -= 1
-            if son_macd > son_macd_s: puan += 1
-            else: puan -= 1
-            if son_fiyat < son_bb_alt: puan += 1
-            elif son_fiyat > son_bb_ust: puan -= 1
-            if son_stoch < 25: puan += 1
-            elif son_stoch > 75: puan -= 1
-            if puan >= 3: karar = "GUCLU AL"
-            elif puan == 2: karar = "AL"
-            elif puan <= -3: karar = "GUCLU SAT"
-            elif puan == -2: karar = "SAT"
-            else: karar = "BEKLE"
-            degisim = ((son_fiyat - veri['Close'].iloc[-2]) / veri['Close'].iloc[-2]) * 100
-            sonuclar.append({
-                "Hisse": hisse.replace(".IS", ""),
-                "Fiyat": round(son_fiyat, 2),
-                "Degisim %": round(degisim, 2),
-                "RSI": round(son_rsi, 1),
-                "Stoch": round(son_stoch, 1),
-                "MACD": round(son_macd, 2),
-                "BB": "Alt" if son_fiyat < son_bb_alt else ("Ust" if son_fiyat > son_bb_ust else "Orta"),
-                "Hacim": "VAR" if anomali else "-",
-                "Puan": puan,
-                "Sinyal": karar
-            })
 
     df = pd.DataFrame(sonuclar)
+
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Toplam Hisse", len(df))
     col2.metric("AL Sinyali", len(df[df['Sinyal'].str.contains("AL")]))
     col3.metric("SAT Sinyali", len(df[df['Sinyal'].str.contains("SAT")]))
-    col4.metric("Bekle", len(df[df['Sinyal'] == "BEKLE"]))
+    col4.metric("Ort. Guven", f"%{df['Guven %'].mean():.1f}" if len(df) > 0 else "-")
+
     st.divider()
 
-    def renk(val):
-        if val == "GUCLU AL": return "background-color:#1a472a; color:#69db7c; font-weight:bold"
-        elif val == "AL": return "background-color:#2d6a4f; color:#95d5b2"
-        elif val == "GUCLU SAT": return "background-color:#4a1010; color:#ff6b6b; font-weight:bold"
-        elif val == "SAT": return "background-color:#6b2737; color:#ffa8b8"
-        elif val == "VAR": return "color:#ffd43b; font-weight:bold"
+    def renk_sinyal(val):
+        if val == "GUCLU AL": return "background-color:#0a2e1a; color:#1D9E75; font-weight:bold"
+        elif val == "AL": return "background-color:#0a2e1a; color:#5DCAA5"
+        elif val == "GUCLU SAT": return "background-color:#2e0a0a; color:#e24b4a; font-weight:bold"
+        elif val == "SAT": return "background-color:#2e0a0a; color:#ffa8b8"
+        return "color:#888"
+
+    def renk_degisim(val):
+        if val > 0: return "color:#1D9E75"
+        elif val < 0: return "color:#e24b4a"
         return ""
 
-    def degisim_renk(val):
-        if val > 0: return "color:#69db7c"
-        elif val < 0: return "color:#ff6b6b"
-        return ""
+    def renk_guven(val):
+        if val >= 70: return "color:#1D9E75; font-weight:bold"
+        elif val >= 50: return "color:#EF9F27"
+        return "color:#e24b4a"
 
-    styled = df.style.map(renk, subset=["Sinyal", "Hacim"]).map(degisim_renk, subset=["Degisim %"])
+    styled = df.style\
+        .map(renk_sinyal, subset=["Sinyal"])\
+        .map(renk_degisim, subset=["Degisim %"])\
+        .map(renk_guven, subset=["Guven %", "Backtest %"])
+
     st.dataframe(styled, use_container_width=True, height=600)
 
-    st.divider()
-    st.subheader("Detayli Grafik")
-    col_a, col_b = st.columns([1, 3])
-    with col_a:
-        secili = st.selectbox("Hisse sec", [h.replace(".IS","") for h in BIST30])
-        periyot = st.selectbox("Periyot", ["1mo", "3mo", "6mo", "1y"])
-        goster = st.multiselect("Goster", ["Fiyat", "RSI", "MACD"], default=["Fiyat", "RSI"])
+with sekme2:
+    st.header("Hisse Detay")
+    secili = st.selectbox("Hisse sec", [h.replace(".IS", "") for h in BIST30])
     secili_is = secili + ".IS"
-    veri = yf.download(secili_is, period=periyot, progress=False)
-    veri.columns = veri.columns.get_level_values(0)
-    veri['RSI'] = rsi_hesapla(veri)
-    veri['MACD'], veri['MACD_S'] = macd_hesapla(veri)
-    bb_ust, bb_ort, bb_alt = bollinger_hesapla(veri)
-    veri['BB_UST'] = bb_ust
-    veri['BB_ALT'] = bb_alt
-    with col_b:
-        if "Fiyat" in goster:
-            st.markdown("**Fiyat ve Bollinger**")
-            st.line_chart(veri[['Close', 'BB_UST', 'BB_ALT']])
-        if "RSI" in goster:
-            st.markdown("**RSI**")
+    det_periyot = st.selectbox("Periyot", ["1mo", "3mo", "6mo", "1y"], index=1, key="det")
+
+    veri = yf.download(secili_is, period=det_periyot, progress=False)
+    if not veri.empty:
+        veri.columns = veri.columns.get_level_values(0)
+        analiz = tum_kriterler(veri)
+        bt = backtest(secili_is)
+
+        col_left, col_right = st.columns([2, 1])
+
+        with col_left:
+            bb_ort = veri['Close'].rolling(20).mean()
+            bb_std = veri['Close'].rolling(20).std()
+            veri['BB_UST'] = bb_ort + 2 * bb_std
+            veri['BB_ALT'] = bb_ort - 2 * bb_std
+
+            destek = analiz["destek"]
+            direnc = analiz["direnc"]
+            veri['Destek'] = destek
+            veri['Direnc'] = direnc
+
+            st.subheader(f"{secili} — Fiyat Grafigi")
+            st.line_chart(veri[['Close', 'BB_UST', 'BB_ALT', 'Destek', 'Direnc']])
+
+            fark = veri['Close'].diff()
+            kazan = fark.where(fark > 0, 0)
+            kayip = -fark.where(fark < 0, 0)
+            rs = kazan.rolling(14).mean() / kayip.rolling(14).mean()
+            veri['RSI'] = 100 - (100 / (1 + rs))
+            st.subheader("RSI")
             st.line_chart(veri['RSI'])
-        if "MACD" in goster:
-            st.markdown("**MACD**")
+
+            ema12 = veri['Close'].ewm(span=12).mean()
+            ema26 = veri['Close'].ewm(span=26).mean()
+            veri['MACD'] = ema12 - ema26
+            veri['MACD_S'] = veri['MACD'].ewm(span=9).mean()
+            st.subheader("MACD")
             st.line_chart(veri[['MACD', 'MACD_S']])
 
-with sekme2:
-    st.subheader("Backtest Sonuclari - BIST 30")
-    periyot_bt = st.selectbox("Test periyodu", ["1y", "2y"], key="bt_periyot")
-    if st.button("Backtesti Calistir"):
-        with st.spinner("Hesaplaniyor, bekleyin..."):
-            bt_sonuclar = []
-            for hisse in BIST30:
-                sonuc = backtest_calistir(hisse, period=periyot_bt)
-                if sonuc and sonuc['toplam_sinyal'] > 0:
-                    bt_sonuclar.append({
-                        "Hisse": sonuc['hisse'],
-                        "Sinyal Sayisi": sonuc['toplam_sinyal'],
-                        "Dogru": sonuc['dogru'],
-                        "Yanlis": sonuc['yanlis'],
-                        "Dogruluk %": sonuc['dogruluk']
-                    })
-            bt_df = pd.DataFrame(bt_sonuclar).sort_values("Dogruluk %", ascending=False)
+        with col_right:
+            st.subheader("Kriter Analizi")
+            for kriter_adi, kriter in analiz["kriterler"].items():
+                p = kriter["puan"]
+                renk = "#1D9E75" if p > 0 else ("#e24b4a" if p < 0 else "#888")
+                isaret = "+" if p > 0 else ("" if p == 0 else "-")
+                st.markdown(f"""
+<div style='padding:10px;margin-bottom:8px;border-radius:8px;border:0.5px solid #2a2d3a;background:#1a1d27'>
+<div style='display:flex;justify-content:space-between;align-items:center'>
+<span style='font-weight:500;color:#ddd'>{kriter_adi}</span>
+<span style='color:{renk};font-weight:bold'>{isaret}{abs(p)}</span>
+</div>
+<div style='font-size:12px;color:#888;margin-top:4px'>{kriter["aciklama"]} — {kriter["deger"]}</div>
+</div>
+""", unsafe_allow_html=True)
 
-            def bt_renk(val):
-                if val >= 70: return "color:#69db7c; font-weight:bold"
-                elif val >= 50: return "color:#ffd43b"
-                else: return "color:#ff6b6b"
+            st.divider()
+            puan = analiz["puan"]
+            karar = sinyal_karar(puan)
+            dogruluk = bt["dogruluk"] if bt else 50.0
+            gskor = guven_skoru(puan, dogruluk)
 
-            st.dataframe(
-                bt_df.style.map(bt_renk, subset=["Dogruluk %"]),
-                use_container_width=True
-            )
-            ort_dogruluk = bt_df['Dogruluk %'].mean()
-            st.metric("Ortalama Dogruluk", f"%{ort_dogruluk:.1f}")
+            st.metric("Toplam Puan", f"{puan}/5")
+            st.metric("Sinyal", karar)
+            st.metric("Backtest Dogrulugu", f"%{dogruluk}")
+            st.metric("Guven Skoru", f"%{gskor}")
